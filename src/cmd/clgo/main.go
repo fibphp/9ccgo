@@ -3,9 +3,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	. "go9cc"
 	"io/ioutil"
 	"log"
 	"os"
+	. "utils"
 )
 
 type CfgConfig struct {
@@ -20,7 +22,7 @@ type CfgConfig struct {
 }
 
 type ClPayload struct {
-	file string
+	file   string
 	tokens *Vector
 }
 
@@ -29,16 +31,13 @@ func (p *ClPayload) Name() string {
 }
 func (p *ClPayload) Play(w *Worker) {
 	input := p.file
-	fmt.Printf("Info tokenize worker:%s <%d> file:%s \n", w.name, getGID(), input)
-	tokens := tokenize(input, true, nil)
-	fmt.Printf("Info done worker:%s <%d> file:%s tokens:%d \n", w.name, getGID(), input, tokens.len)
+	fmt.Printf("Info tokenize worker:%s <%d> file:%s \n", w.Name(), GetGID(), input)
+	tokens := Tokenize(input, true, nil)
+	fmt.Printf("Info done worker:%s <%d> file:%s tokens:%d \n", w.Name(), GetGID(), input, tokens.Len())
 	p.tokens = tokens
 }
 
 func do_cl(cfgs []CfgConfig) {
-	i := "Zend\\zend_alloc.cipp"
-	tokenize(i, true, nil)
-
 	jobQueue := make(chan *Job)
 	dispatch := NewDispatcher("cl", 8, jobQueue, false)
 	dispatch.Run()
@@ -71,7 +70,7 @@ func main() {
 		usage()
 	}
 	if len(os.Args) == 2 && os.Args[1] == "-test" {
-		util_test()
+		Util_test()
 		os.Exit(0)
 	}
 
@@ -110,24 +109,24 @@ func main() {
 	}
 
 	// Tokenize and parse.
-	tokens := tokenize(path, true, nil)
+	tokens := Tokenize(path, true, nil)
 	if debug {
-		print_tokens(tokens)
+		Print_tokens(tokens)
 	}
-	nodes := parse(tokens)
-	globals := sema(nodes)
-	fns := gen_ir(nodes)
+	nodes := Parse(tokens)
+	globals := Sema(nodes)
+	fns := Gen_ir(nodes)
 
 	if dump_ir1 {
-		dump_ir(fns)
+		Dump_ir(fns)
 	}
 
-	alloc_regs(fns)
+	Alloc_regs(fns)
 	if dump_ir2 {
-		dump_ir(fns)
+		Dump_ir(fns)
 	}
 
-	gen_x86(globals, fns)
+	Gen_x86(globals, fns)
 }
 
-func usage() { errorReport("Usage: 9ccgo [-test] [-dump-ir1] [-dump-ir2] <file>") }
+func usage() { ErrorReport("Usage: 9ccgo [-test] [-dump-ir1] [-dump-ir2] <file>") }

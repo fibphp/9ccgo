@@ -1,4 +1,4 @@
-package main
+package go9cc
 
 // 9ccgo's code generation is two-pass. In the first pass, abstract
 // syntax trees are compiled to IT (intermediate representation).
@@ -456,7 +456,7 @@ func gen_stmt(node *Node) {
 		}
 	case ND_BREAK:
 		if break_label == 0 {
-			errorReport("stray 'break' statement")
+			ErrorReport("stray 'break' statement")
 		}
 		jmp(break_label)
 	case ND_RETURN:
@@ -488,11 +488,11 @@ func gen_stmt(node *Node) {
 			return
 		}
 	default:
-		errorReport("unknown node: %d", node.op)
+		ErrorReport("unknown node: %d", node.op)
 	}
 }
 
-func gen_ir(nodes *Vector) *Vector {
+func Gen_ir(nodes *Vector) *Vector {
 	v := new_vec()
 	nlabel = 1
 

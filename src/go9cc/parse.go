@@ -1,4 +1,4 @@
-package main
+package go9cc
 
 // This is recursice-descendent parser which constructs abstract
 // syntax tree from input tokens.
@@ -774,7 +774,7 @@ func toplevel() *Node {
 	return node
 }
 
-func parse(tokens_ *Vector) *Vector {
+func Parse(tokens_ *Vector) *Vector {
 	tokens = tokens_
 	pos = 0
 	penv = new_penv(penv)

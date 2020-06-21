@@ -1,4 +1,4 @@
-package main
+package go9cc
 
 // C preprocessor
 
@@ -271,7 +271,7 @@ func (app *TokenApp) include() {
 	t := ctx_p.get(TK_STR, "string expected")
 	path := t.str
 	ctx_p.get('\n', "newline expected")
-	ctx_p.append_p(tokenize(path, false, app.ctx))
+	ctx_p.append_p(Tokenize(path, false, app.ctx))
 }
 
 func (app *TokenApp) preprocess(tokens *Vector) *Vector {

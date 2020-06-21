@@ -1,4 +1,4 @@
-package main
+package go9cc
 
 import (
 	"fmt"
@@ -173,7 +173,7 @@ func print_line(buf string, path string, pos int) {
 
 func bad_token(t *Token, msg string) {
 	print_line(t.ctx.buf, t.ctx.path, t.start)
-	errorReport(msg)
+	ErrorReport(msg)
 }
 
 func tokstr(t *Token) string {
@@ -217,7 +217,7 @@ func (ctx *Context) block_comment(idx int) int {
 		}
 	}
 
-	errorReport("unclosed comment")
+	ErrorReport("unclosed comment")
 	return -1
 }
 
@@ -275,7 +275,7 @@ func (ctx *Context) char_literal(idx int) int {
 
 	char := buf[idx]
 	if char != '\'' {
-		errorReport("unclosed character literal")
+		ErrorReport("unclosed character literal")
 	}
 	idx += 1
 	t.end = idx
@@ -485,7 +485,7 @@ func (ctx *Context) scan() {
 		}
 
 		print_line(ctx.buf, ctx.path, idx)
-		errorReport("cannot tokenize")
+		ErrorReport("cannot Tokenize")
 	}
 }
 
@@ -539,7 +539,7 @@ func join_string_literals(tokens *Vector) *Vector {
 	return v
 }
 
-func tokenize(path string, add_eof bool, ctx *Context) *Vector {
+func Tokenize(path string, add_eof bool, ctx *Context) *Vector {
 	buf := read_file(path)
 	buf = canonicalize_newline(buf)
 	buf = remove_backslash_newline(buf)
@@ -561,7 +561,7 @@ func tokenize(path string, add_eof bool, ctx *Context) *Vector {
 }
 
 // debug
-func print_tokens(tokens *Vector) {
+func Print_tokens(tokens *Vector) {
 	m := map[int]string{
 		TK_NUM:     "TK_NUM      ",
 		TK_STR:     "TK_STR      ",

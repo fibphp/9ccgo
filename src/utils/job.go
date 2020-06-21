@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"fmt"
@@ -39,7 +39,7 @@ type Dispatcher struct {
 	debug       bool
 }
 
-func getGID() int {
+func GetGID() int {
 	defer func()  {
 		if err := recover(); err != nil {
 			fmt.Println("panic recover:panic info:%v", err)     }
@@ -71,6 +71,10 @@ func NewWorker(name string, dispatcher *Dispatcher) *Worker {
 }
 func (w *Worker) Stop() {
 	w.stopChannel <- true
+}
+
+func (w *Worker) Name() string {
+	return w.name
 }
 
 // 工人开始工作

@@ -1,4 +1,4 @@
-package main
+package go9cc
 
 // This pass generats x86-64 assembly from IR.
 
@@ -234,7 +234,7 @@ func gen(fn *Function) {
 	emit("ret")
 }
 
-func gen_x86(globals, fns *Vector) {
+func Gen_x86(globals, fns *Vector) {
 
 	fmt.Printf(".intel_syntax noprefix\n")
 

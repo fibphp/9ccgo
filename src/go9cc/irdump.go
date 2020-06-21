@@ -1,4 +1,4 @@
-package main
+package go9cc
 
 import (
 	"fmt"
@@ -87,7 +87,7 @@ func tostr(ir *IR) string {
 	return ""
 }
 
-func dump_ir(irv *Vector) {
+func Dump_ir(irv *Vector) {
 	for i := 0; i < irv.len; i++ {
 		fn := irv.data[i].(*Function)
 		fmt.Fprintf(os.Stderr, "%s():\n", fn.name)

@@ -1,4 +1,4 @@
-package main
+package go9cc
 
 // util.go
 
@@ -7,6 +7,10 @@ type Vector struct {
 	data     []interface{}
 	capacity int
 	len      int
+}
+
+func (v *Vector) Len() int {
+	return v.len
 }
 
 // Map
@@ -110,7 +114,7 @@ type Token struct {
 	end   int
 }
 
-// parse.go
+// Parse.go
 const (
 	ND_NUM       = iota + 256 // Number literal
 	ND_STR                    // String literal
@@ -205,7 +209,7 @@ type Node struct {
 	args *Vector
 }
 
-// sema.go
+// Sema.go
 
 type Var struct {
 	ty       *Type
@@ -228,7 +232,7 @@ type IRInfo struct {
 	ty   int
 }
 
-// gen_ir.go
+// Gen_ir.go
 
 const (
 	IR_ADD = iota + 256

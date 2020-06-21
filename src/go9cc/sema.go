@@ -1,4 +1,4 @@
-package main
+package go9cc
 
 // Semantics analyzer. This pass plays a few important roles as shown
 // below:
@@ -85,7 +85,7 @@ func maybe_decay(base *Node, decay bool) *Node {
 func check_lval(node *Node) {
 	op := node.op
 	if op != ND_LVAR && op != ND_GVAR && op != ND_DEREF && op != ND_DOT {
-		errorReport("not an lvalue: %d (%s)", op, node.name)
+		ErrorReport("not an lvalue: %d (%s)", op, node.name)
 	}
 }
 
@@ -128,7 +128,7 @@ func walk(node *Node, decay bool) *Node {
 		{
 			v := find_var(node.name)
 			if v == nil {
-				errorReport("undefined variable: %s", node.name)
+				ErrorReport("undefined variable: %s", node.name)
 			}
 
 			if v.is_local {
@@ -192,7 +192,7 @@ func walk(node *Node, decay bool) *Node {
 			swap(&node.lhs, &node.rhs)
 		}
 		if node.rhs.ty.ty == PTR {
-			errorReport("pointer %c pointer' is not defined", node.op)
+			ErrorReport("pointer %c pointer' is not defined", node.op)
 		}
 
 		if node.lhs.ty.ty == PTR {
@@ -221,12 +221,12 @@ func walk(node *Node, decay bool) *Node {
 	case ND_DOT:
 		node.expr = walk(node.expr, true)
 		if node.expr.ty.ty != STRUCT {
-			errorReport("struct expected before '.'")
+			ErrorReport("struct expected before '.'")
 		}
 
 		ty := node.expr.ty
 		if ty.members == nil {
-			errorReport("incomplete type")
+			ErrorReport("incomplete type")
 		}
 		for i := 0; i < ty.members.len; i++ {
 			m := ty.members.data[i].(*Node)
@@ -237,7 +237,7 @@ func walk(node *Node, decay bool) *Node {
 			node.offset = m.ty.offset
 			return maybe_decay(node, decay)
 		}
-		errorReport("member missing: %s", node.name)
+		ErrorReport("member missing: %s", node.name)
 	case '?':
 		node.cond = walk(node.cond, true)
 		node.then = walk(node.then, true)
@@ -267,11 +267,11 @@ func walk(node *Node, decay bool) *Node {
 		node.expr = walk(node.expr, true)
 
 		if node.expr.ty.ty != PTR {
-			errorReport("operand must be a pointer")
+			ErrorReport("operand must be a pointer")
 		}
 
 		if node.expr.ty.ptr_to.ty == VOID {
-			errorReport("cannot dereference void pointer")
+			ErrorReport("cannot dereference void pointer")
 		}
 
 		node.ty = node.expr.ty.ptr_to
@@ -323,7 +323,7 @@ func walk(node *Node, decay bool) *Node {
 	return nil
 }
 
-func sema(nodes *Vector) *Vector {
+func Sema(nodes *Vector) *Vector {
 	env = new_env(nil)
 	globals = new_vec()
 

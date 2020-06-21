@@ -1,4 +1,4 @@
-package main
+package go9cc
 
 // Unit tests for out data structures
 //

@@ -1,4 +1,4 @@
-package main
+package go9cc
 
 import (
 	"fmt"
@@ -222,7 +222,7 @@ func vec_push(v *Vector, elem interface{}) {
 }
 
 // An errorReport reporting function
-func errorReport(format string, a ...interface{}) {
+func ErrorReport(format string, a ...interface{}) {
 	fmt.Fprintf(os.Stderr, format, a...)
 	fmt.Fprintf(os.Stderr, "\n")
 	os.Exit(1)
@@ -431,7 +431,7 @@ func sb_test() {
 
 }
 
-func util_test() {
+func Util_test() {
 	vec_test()
 	map_test()
 	sb_test()

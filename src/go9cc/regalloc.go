@@ -1,4 +1,4 @@
-package main
+package go9cc
 
 // Register allocator.
 //
@@ -33,7 +33,7 @@ func alloc(ir_reg int) int {
 		used[i] = true
 		return i
 	}
-	errorReport("register exhausted")
+	ErrorReport("register exhausted")
 	return -1
 }
 
@@ -67,7 +67,7 @@ func visit(irv *Vector) {
 	}
 }
 
-func alloc_regs(fns *Vector) {
+func Alloc_regs(fns *Vector) {
 
 	used = make([]bool, num_regs)
 
