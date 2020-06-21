@@ -9,48 +9,6 @@ import (
 	"unsafe"
 )
 
-type ClPayload struct {
-	file string
-}
-
-func (p *ClPayload) Name() string {
-	return p.file
-}
-func (p *ClPayload) Play(w *Worker) {
-	input := p.file
-	fmt.Printf("Info tokenize worker:%s file:%s \n", w.name, input)
-	tokens := tokenize(input, true, nil)
-	fmt.Printf("Info done worker:%s file:%s tokens:%d \n", w.name, input, tokens.len)
-}
-
-func do_cl(cfgs []CfgConfig) {
-	// i := "Zend\\zend_string.cipp"
-	// tokenize(i, true, nil)
-
-	jobQueue := make(chan *Job)
-	dispatch := NewDispatcher("cl", 8, jobQueue, false)
-	dispatch.Run()
-
-	for _, cfg := range cfgs {
-		inputs := cfg.Input
-		for _, input := range inputs {
-			input = input + "ipp"
-			if _, err := os.Stat(input); err == nil || os.IsExist(err) {
-				jobQueue <- &Job{
-					Payload: &ClPayload{
-						file: input,
-					},
-				}
-			} else {
-				fmt.Printf("Error Not Found file:%s \n", input)
-			}
-		}
-	}
-
-	dispatch.Join()
-	dispatch.Stop()
-	close(jobQueue)
-}
 
 func new_sb() *StringBuilder {
 	sb := new(StringBuilder)
@@ -344,12 +302,21 @@ func isgraph(c uint8) bool {
 	return 0x21 <= c && c <= 0x7e
 }
 
+func isgraph_rune(c rune) bool {
+	return 0x21 <= c && c <= 0x7e
+}
+
 func isprint(c uint8) bool {
 	return 0x20 <= c && c <= 0x7e
 }
 
-func isalpha(c uint8) bool {
+func isalpha_char(c uint8) bool {
 	return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z')
+}
+
+func startswith(str string, idx int, buf string) bool {
+	tmp := buf[idx : idx+len(str)]
+	return tmp == str
 }
 
 func isdigit_char(c uint8) bool {

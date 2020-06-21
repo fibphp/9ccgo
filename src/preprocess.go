@@ -4,7 +4,6 @@ package main
 
 var (
 	macros *Map
-	ctx_p  *Context_p
 )
 
 const (
@@ -42,50 +41,50 @@ func new_macro(ty int, name string) *Macro {
 	return m
 }
 
-func append_p(v *Vector) {
+func (ctx_p *Context_p)append_p(v *Vector) {
 	for i := 0; i < v.len; i++ {
 		vec_push(ctx_p.output, v.data[i])
 	}
 }
 
-func add_p(t *Token) { vec_push(ctx_p.output, t) }
+func (ctx_p *Context_p)add_p(t *Token) { vec_push(ctx_p.output, t) }
 
-func next() *Token {
+func (ctx_p *Context_p)next_p() *Token {
 	// assert(ctx_p,pos < ctx_p.input.len)
 	t := ctx_p.input.data[ctx_p.pos].(*Token)
 	ctx_p.pos++
 	return t
 }
 
-func eof() bool { return ctx_p.pos == ctx_p.input.len }
+func (ctx_p *Context_p)eof() bool { return ctx_p.pos == ctx_p.input.len }
 
-func get(ty int, msg string) *Token {
-	t := next()
+func (ctx_p *Context_p)get(ty int, msg string) *Token {
+	t := ctx_p.next_p()
 	if t.ty != ty {
 		bad_token(t, msg)
 	}
 	return t
 }
 
-func ident_p(msg string) string {
-	t := get(TK_IDENT, "parameter file expected")
+func (ctx_p *Context_p)ident_p(msg string) string {
+	t := ctx_p.get(TK_IDENT, "parameter file expected")
 	return t.name
 }
 
-func peek() *Token { return ctx_p.input.data[ctx_p.pos].(*Token) }
+func (ctx_p *Context_p)peek() *Token { return ctx_p.input.data[ctx_p.pos].(*Token) }
 
-func consume_p(ty int) bool {
-	if peek().ty != ty {
+func (ctx_p *Context_p)consume_p(ty int) bool {
+	if ctx_p.peek().ty != ty {
 		return false
 	}
 	ctx_p.pos++
 	return true
 }
 
-func read_until_eol() *Vector {
+func (ctx_p *Context_p)read_until_eol() *Vector {
 	v := new_vec()
-	for !eof() {
-		t := next()
+	for !ctx_p.eof() {
+		t := ctx_p.next_p()
 		if t.ty == '\n' {
 			break
 		}
@@ -152,20 +151,20 @@ func replace_params(m *Macro) {
 	m.tokens = v
 }
 
-func read_one_arg() *Vector {
+func (ctx_p *Context_p)read_one_arg() *Vector {
 	v := new_vec()
-	start := peek()
+	start := ctx_p.peek()
 	level := 0
 
-	for !eof() {
-		t := peek()
+	for !ctx_p.eof() {
+		t := ctx_p.peek()
 		if level == 0 {
 			if t.ty == ')' || t.ty == ',' {
 				return v
 			}
 		}
 
-		next()
+		ctx_p.next_p()
 		if t.ty == '(' {
 			level++
 		} else if t.ty == ')' {
@@ -177,15 +176,15 @@ func read_one_arg() *Vector {
 	return nil
 }
 
-func read_args() *Vector {
+func (ctx_p *Context_p)read_args() *Vector {
 	v := new_vec()
-	if consume_p(')') {
+	if ctx_p.consume_p(')') {
 		return v
 	}
-	vec_push(v, read_one_arg())
-	for !consume_p(')') {
-		get(',', "comma expected")
-		vec_push(v, read_one_arg())
+	vec_push(v, ctx_p.read_one_arg())
+	for !ctx_p.consume_p(')') {
+		ctx_p.get(',', "comma expected")
+		vec_push(v, ctx_p.read_one_arg())
 	}
 	return v
 }
@@ -208,15 +207,15 @@ func stringize(tokens *Vector) *Token {
 	return t
 }
 
-func apply(m *Macro, start *Token) {
+func (ctx_p *Context_p)apply(m *Macro, start *Token) {
 	if m.ty == OBJLIKE {
-		append_p(m.tokens)
+		ctx_p.append_p(m.tokens)
 		return
 	}
 
 	// Function-like macro
-	get('(', "comma expected")
-	args := read_args()
+	ctx_p.get('(', "comma expected")
+	args := ctx_p.read_args()
 	if m.params.len != args.len {
 		bad_token(start, "number of parameter does not match")
 	}
@@ -225,82 +224,85 @@ func apply(m *Macro, start *Token) {
 		t := m.tokens.data[i].(*Token)
 
 		if is_ident(t, "__LINE__") {
-			add_p(new_int_p(line(t)))
+			ctx_p.add_p(new_int_p(line(t)))
 			continue
 		}
 
 		if t.ty == TK_PARAM {
 			if t.stringize {
-				add_p(stringize(args.data[t.val].(*Vector)))
+				ctx_p.add_p(stringize(args.data[t.val].(*Vector)))
 			} else {
-				append_p(args.data[t.val].(*Vector))
+				ctx_p.append_p(args.data[t.val].(*Vector))
 			}
 			continue
 		}
-		add_p(t)
+		ctx_p.add_p(t)
 	}
 }
 
-func funclike_macro(name string) {
+func (ctx_p *Context_p)funclike_macro(name string) {
 	m := new_macro(FUNCLIKE, name)
-	vec_push(m.params, ident_p("parameter file expected"))
-	for !consume_p(')') {
-		get(',', "comma expected")
-		vec_push(m.params, ident_p("parameter file expected"))
+	vec_push(m.params, ctx_p.ident_p("parameter file expected"))
+	for !ctx_p.consume_p(')') {
+		ctx_p.get(',', "comma expected")
+		vec_push(m.params, ctx_p.ident_p("parameter file expected"))
 	}
-	m.tokens = read_until_eol()
+	m.tokens = ctx_p.read_until_eol()
 	replace_params(m)
 }
 
-func objlike_macro(name string) {
+func (ctx_p *Context_p)objlike_macro(name string) {
 	m := new_macro(OBJLIKE, name)
-	m.tokens = read_until_eol()
+	m.tokens = ctx_p.read_until_eol()
 }
 
-func define() {
-	name := ident_p("macro file expected")
-	if consume_p('(') {
-		funclike_macro(name)
+func (ctx_p *Context_p)define() {
+	name := ctx_p.ident_p("macro file expected")
+	if ctx_p.consume_p('(') {
+		ctx_p.funclike_macro(name)
 		return
 	}
-	objlike_macro(name)
+	ctx_p.objlike_macro(name)
 }
 
 func (app *TokenApp) include() {
-	t := get(TK_STR, "string expected")
+	ctx_p := app.ctx_p
+
+	t := ctx_p.get(TK_STR, "string expected")
 	path := t.str
-	get('\n', "newline expected")
-	append_p(tokenize(path, false, app.ctx))
+	ctx_p.get('\n', "newline expected")
+	ctx_p.append_p(tokenize(path, false, app.ctx))
 }
 
 func (app *TokenApp) preprocess(tokens *Vector) *Vector {
 	if macros == nil {
 		macros = new_map()
 	}
-	ctx_p = new_ctx_p(ctx_p, tokens)
+	app.ctx_p = new_ctx_p(app.ctx_p, tokens)
 
-	for !eof() {
-		t := next()
+	ctx_p := app.ctx_p
+	for !ctx_p.eof() {
+		t := ctx_p.next_p()
 
 		if t.ty == TK_IDENT {
 			m := map_get(macros, t.name)
 			if m != nil {
-				apply(m.(*Macro), t)
+				ctx_p.apply(m.(*Macro), t)
 			} else {
-				add_p(t)
+				ctx_p.add_p(t)
 			}
 			continue
 		}
 
 		if t.ty != '#' {
-			add_p(t)
+			ctx_p.add_p(t)
 			continue
 		}
 
-		t = get(TK_IDENT, "identifier expected")
+		t = ctx_p.get(TK_IDENT, "identifier expected")
 
 		if strcmp(t.name, "define") == 0 {
-			define()
+			ctx_p.define()
 		} else if strcmp(t.name, "include") == 0 {
 			app.include()
 		} else {
@@ -308,7 +310,7 @@ func (app *TokenApp) preprocess(tokens *Vector) *Vector {
 		}
 	}
 
-	v := ctx_p.output
-	ctx_p = ctx_p.next
+	v := app.ctx_p.output
+	app.ctx_p = app.ctx_p.next
 	return v
 }

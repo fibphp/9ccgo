@@ -44,49 +44,52 @@ type Type struct {
 
 // token.go
 
-const (
-	TK_NUM       = iota + 256 // Number literal
-	TK_STR                    // String literal
-	TK_IDENT                  // Identifier
-	TK_ARROW                  // ->
-	TK_EXTERN                 // "extern"
-	TK_TYPEDEF                // "typedef"
-	TK_INT                    // "int"
-	TK_CHAR                   // "char"
-	TK_VOID                   // "void"
-	TK_STRUCT                 // "struct"
-	TK_IF                     // "if"
-	TK_ELSE                   // "else"
-	TK_FOR                    // "for"
-	TK_DO                     // "do"
-	TK_WHILE                  // "while"
-	TK_BREAK                  // "break"
-	TK_EQ                     // ==
-	TK_NE                     // !=
-	TK_LE                     // <=
-	TK_GE                     // >=
-	TK_LOGOR                  // ||
-	TK_LOGAND                 // &&
-	TK_SHL                    // <<
-	TK_SHR                    // >>
-	TK_INC                    // ++
-	TK_DEC                    // --
-	TK_MUL_EQ                 // *=
-	TK_DIV_EQ                 // /=
-	TK_MOD_EQ                 // %=
-	TK_ADD_EQ                 // +=
-	TK_SUB_EQ                 // -=
-	TK_SHL_EQ                 // <<=
-	TK_SHR_EQ                 // >>=
-	TK_BITAND_EQ              // &=
-	TK_XOR_EQ                 // ^=
-	TK_BITOR_EQ               // |=
-	TK_RETURN                 // "return"
-	TK_SIZEOF                 // "sizeof"
-	TK_ALIGNOF                // "_Alignof"
-	TK_PARAM                  // Function-like macro parameter
-	TK_EOF                    // End marker
-)
+const TK_NUM = 256      // Number literal
+const TK_STR = 257      // String literal
+const TK_IDENT = 258    // Identifier
+const TK_ARROW = 259    // ->
+const TK_EXTERN = 260   // "extern"
+const TK_TYPEDEF = 261  // "typedef"
+const TK_INT = 262      // "int"
+const TK_CHAR = 263     // "char"
+const TK_VOID = 264     // "void"
+const TK_STRUCT = 265   // "struct"
+const TK_BOOL = 266     // "_Bool"
+const TK_IF = 267       // "if"
+const TK_ELSE = 268     // "else"
+const TK_FOR = 269      // "for"
+const TK_DO = 270       // "do"
+const TK_WHILE = 271    // "while"
+const TK_SWITCH = 272   // "switch"
+const TK_CASE = 273     // "case"
+const TK_BREAK = 274    // "break"
+const TK_CONTINUE = 275 // "continue"
+const TK_EQ = 276       // ==
+const TK_NE = 277       // !=
+const TK_LE = 278       // <=
+const TK_GE = 279       // >=
+const TK_LOGOR = 280    // ||
+const TK_LOGAND = 281   // &&
+const TK_SHL = 282      // <<
+const TK_SHR = 283      // >>
+const TK_INC = 284      // ++
+const TK_DEC = 285      // --
+const TK_MUL_EQ = 286   // *=
+const TK_DIV_EQ = 287   // /=
+const TK_MOD_EQ = 288   // %=
+const TK_ADD_EQ = 289   // +=
+const TK_SUB_EQ = 290   // -=
+const TK_SHL_EQ = 291   // <<=
+const TK_SHR_EQ = 292   // >>=
+const TK_AND_EQ = 293   // &=
+const TK_XOR_EQ = 294   // ^=
+const TK_OR_EQ = 295    // |=
+const TK_RETURN = 296   // "return"
+const TK_SIZEOF = 297   // "sizeof"
+const TK_ALIGNOF = 298  // "_Alignof"
+const TK_TYPEOF = 299   // "typeof"
+const TK_PARAM = 300    // Function-like macro parameter
+const TK_EOF = 301      // End marker
 
 // Token type
 type Token struct {
@@ -102,10 +105,9 @@ type Token struct {
 	stringize bool
 
 	// For errorReport reporting
-	buf   string
-	path  string
-	start string
-	end   string
+	ctx   *Context
+	start int
+	end   int
 }
 
 // parse.go

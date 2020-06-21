@@ -6,38 +6,61 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"unicode"
 )
 
+const symbols_c = "+-*/;=(),{}<>[]&.!?:|^%~#"
+
 var (
-	buf      string
-	filename string
-
-	keywords *Map
-
-	symbols = []Keyword{
-		{name: "<<=", ty: TK_SHL_EQ},
-		{name: ">>=", ty: TK_SHR_EQ},
-		{name: "!=", ty: TK_NE},
-		{name: "&&", ty: TK_LOGAND},
-		{name: "++", ty: TK_INC},
-		{name: "--", ty: TK_DEC},
-		{name: "->", ty: TK_ARROW},
-		{name: "<<", ty: TK_SHL},
-		{name: "<=", ty: TK_LE},
-		{name: "==", ty: TK_EQ},
-		{name: ">=", ty: TK_GE},
-		{name: ">>", ty: TK_SHR},
-		{name: "||", ty: TK_LOGOR},
-		{name: "*=", ty: TK_MUL_EQ},
-		{name: "/=", ty: TK_DIV_EQ},
-		{name: "%=", ty: TK_MOD_EQ},
-		{name: "+=", ty: TK_ADD_EQ},
-		{name: "-=", ty: TK_SUB_EQ},
-		{name: "&=", ty: TK_BITAND_EQ},
-		{name: "^=", ty: TK_XOR_EQ},
-		{name: "|=", ty: TK_BITOR_EQ},
+	keywords = map[string]int{
+		"_Alignof": TK_ALIGNOF,
+		"_Bool":    TK_BOOL,
+		"break":    TK_BREAK,
+		"case":     TK_CASE,
+		"char":     TK_CHAR,
+		"continue": TK_CONTINUE,
+		"do":       TK_DO,
+		"else":     TK_ELSE,
+		"extern":   TK_EXTERN,
+		"for":      TK_FOR,
+		"if":       TK_IF,
+		"int":      TK_INT,
+		"return":   TK_RETURN,
+		"sizeof":   TK_SIZEOF,
+		"struct":   TK_STRUCT,
+		"switch":   TK_SWITCH,
+		"typedef":  TK_TYPEDEF,
+		"typeof":   TK_TYPEOF,
+		"void":     TK_VOID,
+		"while":    TK_WHILE,
 	}
+
+	symbols_2 = map[string]int{
+		"!=": TK_NE,
+		"&&": TK_LOGAND,
+		"++": TK_INC,
+		"--": TK_DEC,
+		"->": TK_ARROW,
+		"<<": TK_SHL,
+		"<=": TK_LE,
+		"==": TK_EQ,
+		">=": TK_GE,
+		">>": TK_SHR,
+		"||": TK_LOGOR,
+		"*=": TK_MUL_EQ,
+		"/=": TK_DIV_EQ,
+		"%=": TK_MOD_EQ,
+		"+=": TK_ADD_EQ,
+		"-=": TK_SUB_EQ,
+		"&=": TK_AND_EQ,
+		"^=": TK_XOR_EQ,
+		"|=": TK_OR_EQ,
+	}
+
+	symbols_3 = map[string]int{
+		"<<=": TK_SHL_EQ,
+		">>=": TK_SHR_EQ,
+	}
+
 	escaped = map[uint8]int{
 		'a': '\a',
 		'b': '\b',
@@ -51,22 +74,17 @@ var (
 	}
 )
 
-type TokenApp struct {
-	name string
-	ctx  *Context
-}
-
-type Keyword struct {
-	name string
-	ty   int
-}
-
 type Context struct {
 	path   string
 	buf    string
 	pos    string
 	tokens *Vector
 	next   *Context
+}
+
+type TokenApp struct {
+	ctx *Context
+	ctx_p *Context_p
 }
 
 func read_file(path string) string {
@@ -115,9 +133,10 @@ func new_ctx(next *Context, path, buf string) *Context {
 
 // Finds a line pointed by a given pointer from the input line
 // to print it out.
-func print_line(buf, path, pos string) {
+func print_line(buf string, path string, pos int) {
 	curline, s := buf, buf
 	line, col := 0, 0
+	pos_ := buf[pos:]
 
 	for i, c := range buf {
 
@@ -129,7 +148,7 @@ func print_line(buf, path, pos string) {
 			continue
 		}
 
-		if s != pos {
+		if s != pos_ {
 			col++
 			s = buf[i+1:]
 			continue
@@ -153,19 +172,22 @@ func print_line(buf, path, pos string) {
 }
 
 func bad_token(t *Token, msg string) {
-	print_line(t.buf, t.path, t.start)
+	print_line(t.ctx.buf, t.ctx.path, t.start)
 	errorReport(msg)
 }
 
 func tokstr(t *Token) string {
 	// assert(t.start && t.end)
-	return strndup(t.start, len(t.start)-len(t.end))
+	buf := t.ctx.buf
+	return strndup(buf[t.start:], t.end-t.start)
 }
 
 func line(t *Token) int {
+	buf := t.ctx.buf
+	ll := len(buf)
 	n := 1
-	for i := 0; i < len(t.buf)-len(t.end); i++ {
-		if rune(t.buf[i]) == '\n' {
+	for i := 0; i < ll-t.end; i++ {
+		if buf[i] == '\n' {
 			n++
 		}
 	}
@@ -177,174 +199,145 @@ func line(t *Token) int {
 // The tokenizer splits an inpuit string into tokens.
 // Spaces and comments are removed by the tokenizer.
 
-func (app *TokenApp) add_t(ty int, start string) *Token {
+func (ctx *Context) add_t(ty, start int) *Token {
 	t := new(Token)
 	t.ty = ty
 	t.start = start
-	t.path = app.ctx.path
-	t.buf = app.ctx.buf
-	vec_push(app.ctx.tokens, t)
+	t.ctx = ctx
+	vec_push(ctx.tokens, t)
 	return t
 }
 
-func keyword_map() *Map {
-	kmap := new_map()
-	map_puti(kmap, "_Alignof", TK_ALIGNOF)
-	map_puti(kmap, "break", TK_BREAK)
-	map_puti(kmap, "char", TK_CHAR)
-	map_puti(kmap, "do", TK_DO)
-	map_puti(kmap, "else", TK_ELSE)
-	map_puti(kmap, "extern", TK_EXTERN)
-	map_puti(kmap, "for", TK_FOR)
-	map_puti(kmap, "if", TK_IF)
-	map_puti(kmap, "int", TK_INT)
-	map_puti(kmap, "return", TK_RETURN)
-	map_puti(kmap, "sizeof", TK_SIZEOF)
-	map_puti(kmap, "struct", TK_STRUCT)
-	map_puti(kmap, "typedef", TK_TYPEDEF)
-	map_puti(kmap, "void", TK_VOID)
-	map_puti(kmap, "while", TK_WHILE)
-	return kmap
-}
-
-func block_comment(pos string) string {
-	for s := pos[2:]; len(s) != 0; s = s[1:] {
-		if strncmp(s, "*/", 2) == 0 {
-			return s[2:]
+func (ctx *Context) block_comment(idx int) int {
+	buf := ctx.buf
+	ll := len(buf)
+	for ; idx < ll; idx++ {
+		if startswith("*/", idx, buf) {
+			return idx + 2
 		}
 	}
-	print_line(buf, filename, pos)
+
 	errorReport("unclosed comment")
-	return ""
+	return -1
 }
 
-func c_char(p string, val *int) string {
-	*val = 0
-	idx := 0
+func (ctx *Context) c_char(val *int, idx int) int {
+	buf := ctx.buf
+	char := buf[idx]
+	if char != '\\' {
+		*val = int(char)
+		return idx + 1
+	}
 
-	char := p[idx]
+	idx += 1
+	char = buf[idx]
 	esc, ok := escaped[char]
 	if ok {
 		*val = esc
-		idx += 1
-		return p[idx:]
+		return idx + 1
 	}
 	if char == 'x' {
 		tmp := 0
 		idx += 1
-		char = p[idx]
+		char = buf[idx]
 		for isxdigit_char(char) {
 			tmp = tmp*16 + isxdigit_val(char)
 			idx += 1
-			char = p[idx]
+			char = buf[idx]
 		}
 		*val = tmp
-		return p[idx:]
+		return idx
 	}
 
 	if isoctal_char(char) {
 		tmp := isoctal_val(char)
 		idx += 1
-		char = p[idx]
+		char = buf[idx]
 		for isoctal_char(char) {
 			tmp = tmp*8 + isoctal_val(char)
 			idx += 1
-			char = p[idx]
+			char = buf[idx]
 		}
 		*val = tmp
-		return p[idx:]
+		return idx
 	}
 
 	*val = int(char)
+	return idx + 1
+}
+
+func (ctx *Context) char_literal(idx int) int {
+	buf := ctx.buf
 	idx += 1
-	return p[idx:]
+
+	t := ctx.add_t(TK_NUM, idx)
+	idx = ctx.c_char(&t.val, idx)
+
+	char := buf[idx]
+	if char != '\'' {
+		errorReport("unclosed character literal")
+	}
+	idx += 1
+	t.end = idx
+	return idx
 }
 
-func (app *TokenApp) char_literal(p string) string {
-	t := app.add_t(TK_NUM, p)
-	p = p[1:]
+func (ctx *Context) string_literal(idx int) int {
+	buf := ctx.buf
+	ll := len(buf)
 
-	if len(p) == 0 {
-		goto err
-	}
-
-	if rune(p[0]) != '\\' {
-		t.val = int(p[0])
-		p = p[1:]
-	} else {
-		if len(p) < 2 {
-			goto err
-		}
-		p = c_char(p[1:], &t.val)
-	}
-
-	if p[0] != '\'' {
-		goto err
-	}
-	t.end = p[1:]
-	return p[1:]
-
-err:
-	bad_token(t, "unclosed character literal")
-	return ""
-}
-
-func (app *TokenApp) string_literal(p string) string {
-
-	t := app.add_t(TK_STR, p)
-	p = p[1:]
+	idx += 1
+	t := ctx.add_t(TK_STR, idx)
 	sb := new_sb()
+	char := buf[idx]
+	for char != '"' {
+		tmp := 0
+		idx = ctx.c_char(&tmp, idx)
+		sb_add(sb, string(tmp))
 
-	for rune(p[0]) != '"' {
-		if len(p) == 0 {
-			goto err
+		if idx >= ll {
+			bad_token(t, "unclosed string literal")
 		}
-
-		if p[0] != '\\' {
-			sb_add(sb, string(p[0]))
-			p = p[1:]
-			continue
+		char = buf[idx]
+		if char == '\n' {
+			bad_token(t, "newline in string literal")
 		}
-
-		if len(p) < 2 {
-			goto err
-		}
-		val := 0
-		p = c_char(p[1:], &val)
-		sb_add(sb, string(val))
 	}
-
 	t.str = sb_get(sb)
-	t.len = sb.len
-	t.end = p[1:]
-	return p[1:]
-
-err:
-	bad_token(t, "unclosed string literal")
-	return ""
+	t.len = len(t.str)
+	idx += 1
+	t.end = idx
+	return idx
 }
 
-func (app *TokenApp) ident_t(p string) string {
+func (ctx *Context) ident_t(idx int) int {
+	buf := ctx.buf
 	ilen := 1
-	char := p[ilen]
-	for isalpha(char) || isdigit_char(char) || char == '_' {
+	char := buf[ilen]
+	for isalpha_char(char) || isdigit_char(char) || char == '_' {
 		ilen++
-		char = p[ilen]
+		char = buf[ilen]
 	}
 
-	name := strndup(p, ilen)
-	ty := map_geti(keywords, name, TK_IDENT)
-	t := app.add_t(ty, p)
+	name := buf[idx : idx+ilen]
+	ty, ok := keywords[name]
+	if !ok {
+		ty = TK_IDENT
+	}
+
+	t := ctx.add_t(ty, idx)
 	t.name = name
-	t.end = p[ilen:]
-	return p[ilen:]
+	idx += ilen
+	t.end = idx
+	return idx
 }
 
-func (app *TokenApp) hexadecimal(p string) string {
-	t := app.add_t(TK_NUM, p)
+func (ctx *Context) hexadecimal(idx int) int {
+	buf := ctx.buf
+	t := ctx.add_t(TK_NUM, idx)
 
-	idx := 2
-	char := p[idx]
+	idx += 2
+	char := buf[idx]
 	if !isxdigit_char(char) {
 		bad_token(t, "bad hexadecimal number")
 	}
@@ -353,132 +346,145 @@ func (app *TokenApp) hexadecimal(p string) string {
 	for isxdigit_char(char) {
 		tmp = tmp*16 + isxdigit_val(char)
 		idx += 1
-		char = p[idx]
+		char = buf[idx]
 	}
 
 	t.val = tmp
-	return p[idx:]
+	t.end = idx
+	return idx
 }
 
-func (app *TokenApp) octal(p string) string {
-	t := app.add_t(TK_NUM, p)
-	p = p[1:]
+func (ctx *Context) octal(idx int) int {
+	buf := ctx.buf
+	t := ctx.add_t(TK_NUM, idx)
 
-	c := p[0]
-	for '0' <= c && c <= '7' {
-		t.val = t.val*8 + int(c) - '0'
-		p = p[1:]
-		c = p[0]
+	char := buf[idx]
+	tmp := 0
+	for isoctal_char(char) {
+		tmp = tmp*8 + isoctal_val(char)
+
+		idx += 1
+		char = buf[idx]
 	}
-	t.end = p
-	return p
+
+	t.val = tmp
+	t.end = idx
+	return idx
 }
 
-func (app *TokenApp) decimal(p string) string {
-	t := app.add_t(TK_NUM, p)
-	for unicode.IsDigit(rune(p[0])) {
-		t.val = t.val*10 + int(p[0]) - '0'
-		p = p[1:]
+func (ctx *Context) decimal(idx int) int {
+	buf := ctx.buf
+	t := ctx.add_t(TK_NUM, idx)
+
+	char := buf[idx]
+	tmp := 0
+	for isdigit_char(char){
+		tmp = tmp * 10 + isdigit_val(char)
+
+		idx += 1
+		char = buf[idx]
 	}
-	t.end = p
-	return p
+
+	t.val = tmp
+	t.end = idx
+	return idx
 }
 
-func (app *TokenApp) number(p string) string {
-	if strncasecmp(p, "0x", 2) == 0 {
-		return app.hexadecimal(p)
+func (ctx *Context) number(idx int) int {
+	buf := ctx.buf
+	if startswith("0x", idx, buf) || startswith("0X", idx, buf) {
+		return ctx.hexadecimal(idx)
 	}
-	char := p[0]
+
+	char := buf[idx]
 	if char == '0' {
-		return app.octal(p)
+		return ctx.octal(idx)
 	}
-	return app.decimal(p)
+
+	return ctx.decimal(idx)
 }
 
 // Tokenized input is stored to this array
-func (app *TokenApp) scan() {
-	p := buf
-
-loop:
-	for len(p) != 0 {
-		c := p[0]
-		// New line (preprocessor-only token)
-		if c == '\n' {
-			t := app.add_t(int(c), p)
-			p = p[1:]
-			t.end = p
+func (ctx *Context) scan() {
+	buf := ctx.buf
+	idx := 0
+	ll := len(buf)
+	for idx < ll {
+		char := buf[idx]
+		if char == '\n' {
+			t := ctx.add_t(int(char), idx)
+			idx += 1
+			t.end = idx
 			continue
 		}
 
-		// Whitespace
-		if unicode.IsSpace(c) {
-			p = p[1:]
+		if char == ' ' || char == '\t' || char == '\v' || char == '\f' {
+			idx += 1
 			continue
 		}
 
-		// Line comment
-		if strncmp(p, "//", 2) == 0 {
-			for len(p) != 0 && c != '\n' {
-				p = p[1:]
-				c = p[0]
+		if startswith("//", idx, buf) {
+			for idx < ll && buf[idx] != '\n' {
+				idx += 1
 			}
 			continue
 		}
 
-		// Block comment
-		if strncmp(p, "/*", 2) == 0 {
-			p = block_comment(p)
+		if startswith("/*", idx, buf) {
+			idx = ctx.block_comment(idx)
 			continue
 		}
 
-		// Character literal
-		if c == '\'' {
-			p = app.char_literal(p)
+		if char == '\'' {
+			idx = ctx.char_literal(idx)
 			continue
 		}
 
-		// String literal
-		if c == '"' {
-			p = app.string_literal(p)
+		if char == '"' {
+			idx = ctx.string_literal(idx)
 			continue
 		}
 
-		// Multi-letter symbol
-		for _, sym := range symbols {
-			length := len(sym.name)
-			if length > len(p) {
-				length = len(p)
-			}
-			if strncmp(p, sym.name, length) != 0 {
+		if idx+1 < ll {
+			symbol := buf[idx : idx+2]
+			ty, ok := symbols_2[symbol]
+			if ok {
+				t := ctx.add_t(ty, idx)
+				idx += len(symbol)
+				t.end = idx
 				continue
 			}
-			t := app.add_t(sym.ty, p)
-			p = p[length:]
-			t.end = p
-			continue loop
 		}
 
-		// Single-letter symbol
-		if strchr("+-*/;=(),{}<>[]&.!?:|^%~#", c) >= 0 {
-			t := app.add_t(int(c), p)
-			p = p[1:]
-			t.end = p
+		if idx+2 < ll {
+			symbol := buf[idx : idx+3]
+			ty, ok := symbols_3[symbol]
+			if ok {
+				t := ctx.add_t(ty, idx)
+				idx += len(symbol)
+				t.end = idx
+				continue
+			}
+		}
+
+		if strchr("+-*/;=(),{}<>[]&.!?:|^%~#", char) >= 0 {
+			t := ctx.add_t(int(char), idx)
+			idx += 1
+			t.end = idx
 			continue
 		}
 
-		// Keyword or identifier
-		if isalpha(c) || c == '_' {
-			p = app.ident_t(p)
+		if isalpha_char(char) || char == '_' {
+			idx = ctx.ident_t(idx)
 			continue
 		}
 
-		// Number
-		if isdigit_char(c) {
-			p = app.number(p)
+		if isdigit_char(char) {
+			idx = ctx.number(idx)
 			continue
 		}
 
-		print_line(app.ctx.buf, app.ctx.path, p)
+		print_line(ctx.buf, ctx.path, idx)
 		errorReport("cannot tokenize")
 	}
 }
@@ -534,20 +540,16 @@ func join_string_literals(tokens *Vector) *Vector {
 }
 
 func tokenize(path string, add_eof bool, ctx *Context) *Vector {
-	if keywords == nil {
-		keywords = keyword_map()
-	}
-
-	buf = read_file(path)
+	buf := read_file(path)
 	buf = canonicalize_newline(buf)
 	buf = remove_backslash_newline(buf)
 	buf = remove_pragma_newline(buf)
 	app := &TokenApp{
 		ctx: new_ctx(ctx, path, buf),
 	}
-	app.scan()
+	app.ctx.scan()
 	if add_eof {
-		app.add_t(TK_EOF, "")
+		app.ctx.add_t(TK_EOF, -1)
 	}
 
 	v := app.ctx.tokens
@@ -561,47 +563,48 @@ func tokenize(path string, add_eof bool, ctx *Context) *Vector {
 // debug
 func print_tokens(tokens *Vector) {
 	m := map[int]string{
-		TK_NUM:       "TK_NUM      ",
-		TK_STR:       "TK_STR      ",
-		TK_IDENT:     "TK_IDENT    ",
-		TK_ARROW:     "TK_ARROW    ",
-		TK_EXTERN:    "TK_EXTERN   ",
-		TK_TYPEDEF:   "TK_TYPEDEF  ",
-		TK_INT:       "TK_INT      ",
-		TK_CHAR:      "TK_CHAR     ",
-		TK_VOID:      "TK_VOID     ",
-		TK_STRUCT:    "TK_STRUCT   ",
-		TK_IF:        "TK_IF       ",
-		TK_ELSE:      "TK_ELSE     ",
-		TK_FOR:       "TK_FOR      ",
-		TK_DO:        "TK_DO       ",
-		TK_WHILE:     "TK_WHILE    ",
-		TK_BREAK:     "TK_BREAK    ",
-		TK_EQ:        "TK_EQ       ",
-		TK_NE:        "TK_NE       ",
-		TK_LE:        "TK_LE       ",
-		TK_GE:        "TK_GE       ",
-		TK_LOGOR:     "TK_LOGOR    ",
-		TK_LOGAND:    "TK_LOGAND   ",
-		TK_SHL:       "TK_SHL      ",
-		TK_SHR:       "TK_SHR      ",
-		TK_INC:       "TK_INC      ",
-		TK_DEC:       "TK_DEC      ",
-		TK_MUL_EQ:    "TK_MUL_EQ   ",
-		TK_DIV_EQ:    "TK_DIV_EQ   ",
-		TK_MOD_EQ:    "TK_MOD_EQ   ",
-		TK_ADD_EQ:    "TK_ADD_EQ   ",
-		TK_SUB_EQ:    "TK_SUB_EQ   ",
-		TK_SHL_EQ:    "TK_SHL_EQ   ",
-		TK_SHR_EQ:    "TK_SHR_EQ   ",
-		TK_BITAND_EQ: "TK_BITAND_EQ",
-		TK_XOR_EQ:    "TK_XOR_EQ   ",
-		TK_BITOR_EQ:  "TK_BITOR_EQ ",
-		TK_RETURN:    "TK_RETURN   ",
-		TK_SIZEOF:    "TK_SIZEOF   ",
-		TK_ALIGNOF:   "TK_ALIGNOF  ",
-		TK_PARAM:     "TK_PARAM    ",
-		TK_EOF:       "TK_EOF      ",
+		TK_NUM:     "TK_NUM      ",
+		TK_STR:     "TK_STR      ",
+		TK_IDENT:   "TK_IDENT    ",
+		TK_ARROW:   "TK_ARROW    ",
+		TK_EXTERN:  "TK_EXTERN   ",
+		TK_TYPEDEF: "TK_TYPEDEF  ",
+		TK_INT:     "TK_INT      ",
+		TK_CHAR:    "TK_CHAR     ",
+		TK_VOID:    "TK_VOID     ",
+		TK_STRUCT:  "TK_STRUCT   ",
+		TK_IF:      "TK_IF       ",
+		TK_ELSE:    "TK_ELSE     ",
+		TK_FOR:     "TK_FOR      ",
+		TK_DO:      "TK_DO       ",
+		TK_WHILE:   "TK_WHILE    ",
+		TK_BREAK:   "TK_BREAK    ",
+		TK_EQ:      "TK_EQ       ",
+		TK_NE:      "TK_NE       ",
+		TK_LE:      "TK_LE       ",
+		TK_GE:      "TK_GE       ",
+		TK_LOGOR:   "TK_LOGOR    ",
+		TK_LOGAND:  "TK_LOGAND   ",
+		TK_SHL:     "TK_SHL      ",
+		TK_SHR:     "TK_SHR      ",
+		TK_INC:     "TK_INC      ",
+		TK_DEC:     "TK_DEC      ",
+		TK_MUL_EQ:  "TK_MUL_EQ   ",
+		TK_DIV_EQ:  "TK_DIV_EQ   ",
+		TK_MOD_EQ:  "TK_MOD_EQ   ",
+		TK_ADD_EQ:  "TK_ADD_EQ   ",
+		TK_SUB_EQ:  "TK_SUB_EQ   ",
+		TK_SHL_EQ:  "TK_SHL_EQ   ",
+		TK_SHR_EQ:  "TK_SHR_EQ   ",
+		TK_AND_EQ:  "TK_BITAND_EQ",
+		TK_XOR_EQ:  "TK_XOR_EQ   ",
+		TK_OR_EQ:   "TK_BITOR_EQ ",
+		TK_RETURN:  "TK_RETURN   ",
+		TK_SIZEOF:  "TK_SIZEOF   ",
+		TK_ALIGNOF: "TK_ALIGNOF  ",
+		TK_TYPEOF:  "TK_TYPEOF  ",
+		TK_PARAM:   "TK_PARAM    ",
+		TK_EOF:     "TK_EOF      ",
 	}
 	for i := 0; i < tokens.len; i++ {
 		t := tokens.data[i].(*Token)

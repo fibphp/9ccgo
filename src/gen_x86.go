@@ -41,7 +41,7 @@ func backslash_escape(s string, length int) string {
 		if ok {
 			sb_add(sb, "\\")
 			sb_add(sb, string(esc))
-		} else if isgraph(c) || c == ' ' {
+		} else if isgraph_rune(c) || c == ' ' {
 			sb_add(sb, string(c))
 		} else {
 			sb_append(sb, format("\\%03o", c))
