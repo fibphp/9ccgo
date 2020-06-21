@@ -564,7 +564,7 @@ func direct_decl(ty *Type) *Node {
 		bad_token(t, "bad direct-declarator")
 	}
 
-	// Read the second half of type name (e.g. `[3][5]`).
+	// Read the second half of type file (e.g. `[3][5]`).
 	*placeholder = *read_array(ty)
 
 	// Read an initializer.
@@ -611,7 +611,7 @@ func stmt() *Node {
 	switch t.ty {
 	case TK_TYPEDEF:
 		node := declaration()
-		// assert(node.name)
+		// assert(node.file)
 		map_put(penv.typedefs, node.name, node.ty)
 		return &null_stmt
 	case TK_IF:

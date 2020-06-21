@@ -200,7 +200,7 @@ func gen(fn *Function) {
 				emit("mov %s, rax", regs[lhs])
 				break
 			}
-			if popcount(uint(rhs)) == 1 {
+			if popCount(uint(rhs)) == 1 {
 				emit("shl %s, %d", regs[lhs], ctz(uint(rhs)))
 				break
 			}

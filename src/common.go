@@ -101,7 +101,7 @@ type Token struct {
 	// For preprocessor
 	stringize bool
 
-	// For error reporting
+	// For errorReport reporting
 	buf   string
 	path  string
 	start string

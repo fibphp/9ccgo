@@ -33,7 +33,7 @@ func alloc(ir_reg int) int {
 		used[i] = true
 		return i
 	}
-	error("register exhausted")
+	errorReport("register exhausted")
 	return -1
 }
 

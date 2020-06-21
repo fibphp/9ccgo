@@ -10,12 +10,12 @@ import (
 )
 
 var (
-	input_file string
-	buf        string
-	filename   string
-	keywords   *Map
-	ctx        *Context
-	symbols    = []Keyword{
+	buf      string
+	filename string
+
+	keywords *Map
+
+	symbols = []Keyword{
 		{name: "<<=", ty: TK_SHL_EQ},
 		{name: ">>=", ty: TK_SHR_EQ},
 		{name: "!=", ty: TK_NE},
@@ -38,7 +38,7 @@ var (
 		{name: "^=", ty: TK_XOR_EQ},
 		{name: "|=", ty: TK_BITOR_EQ},
 	}
-	escaped = map[rune]int{
+	escaped = map[uint8]int{
 		'a': '\a',
 		'b': '\b',
 		'f': '\f',
@@ -50,6 +50,11 @@ var (
 		'E': '\033',
 	}
 )
+
+type TokenApp struct {
+	name string
+	ctx  *Context
+}
 
 type Keyword struct {
 	name string
@@ -130,7 +135,7 @@ func print_line(buf, path, pos string) {
 			continue
 		}
 
-		fmt.Fprintf(os.Stderr, "error at %s:%d:%d\n\n", path, line+1, col+1)
+		fmt.Fprintf(os.Stderr, "errorReport at %s:%d:%d\n\n", path, line+1, col+1)
 		for i, c2 := range curline {
 			if c2 == '\n' {
 				curline = curline[:i]
@@ -149,7 +154,7 @@ func print_line(buf, path, pos string) {
 
 func bad_token(t *Token, msg string) {
 	print_line(t.buf, t.path, t.start)
-	error(msg)
+	errorReport(msg)
 }
 
 func tokstr(t *Token) string {
@@ -172,13 +177,13 @@ func line(t *Token) int {
 // The tokenizer splits an inpuit string into tokens.
 // Spaces and comments are removed by the tokenizer.
 
-func add_t(ty int, start string) *Token {
+func (app *TokenApp) add_t(ty int, start string) *Token {
 	t := new(Token)
 	t.ty = ty
 	t.start = start
-	t.path = ctx.path
-	t.buf = ctx.buf
-	vec_push(ctx.tokens, t)
+	t.path = app.ctx.path
+	t.buf = app.ctx.buf
+	vec_push(app.ctx.tokens, t)
 	return t
 }
 
@@ -209,12 +214,54 @@ func block_comment(pos string) string {
 		}
 	}
 	print_line(buf, filename, pos)
-	error("unclosed comment")
+	errorReport("unclosed comment")
 	return ""
 }
 
-func char_literal(p string) string {
-	t := add_t(TK_NUM, p)
+func c_char(p string, val *int) string {
+	*val = 0
+	idx := 0
+
+	char := p[idx]
+	esc, ok := escaped[char]
+	if ok {
+		*val = esc
+		idx += 1
+		return p[idx:]
+	}
+	if char == 'x' {
+		tmp := 0
+		idx += 1
+		char = p[idx]
+		for isxdigit_char(char) {
+			tmp = tmp*16 + isxdigit_val(char)
+			idx += 1
+			char = p[idx]
+		}
+		*val = tmp
+		return p[idx:]
+	}
+
+	if isoctal_char(char) {
+		tmp := isoctal_val(char)
+		idx += 1
+		char = p[idx]
+		for isoctal_char(char) {
+			tmp = tmp*8 + isoctal_val(char)
+			idx += 1
+			char = p[idx]
+		}
+		*val = tmp
+		return p[idx:]
+	}
+
+	*val = int(char)
+	idx += 1
+	return p[idx:]
+}
+
+func (app *TokenApp) char_literal(p string) string {
+	t := app.add_t(TK_NUM, p)
 	p = p[1:]
 
 	if len(p) == 0 {
@@ -228,13 +275,7 @@ func char_literal(p string) string {
 		if len(p) < 2 {
 			goto err
 		}
-		esc := escaped[rune(p[1])]
-		if esc != 0 {
-			t.val = esc
-		} else {
-			t.val = int(p[1])
-		}
-		p = p[2:]
+		p = c_char(p[1:], &t.val)
 	}
 
 	if p[0] != '\'' {
@@ -248,9 +289,9 @@ err:
 	return ""
 }
 
-func string_literal(p string) string {
+func (app *TokenApp) string_literal(p string) string {
 
-	t := add_t(TK_STR, p)
+	t := app.add_t(TK_STR, p)
 	p = p[1:]
 	sb := new_sb()
 
@@ -265,17 +306,12 @@ func string_literal(p string) string {
 			continue
 		}
 
-		p = p[1:]
-		if len(p) == 0 {
+		if len(p) < 2 {
 			goto err
 		}
-		esc := escaped[rune(p[0])]
-		if esc != 0 {
-			sb_add(sb, string(esc))
-		} else {
-			sb_add(sb, string(p[0]))
-		}
-		p = p[1:]
+		val := 0
+		p = c_char(p[1:], &val)
+		sb_add(sb, string(val))
 	}
 
 	t.str = sb_get(sb)
@@ -288,49 +324,44 @@ err:
 	return ""
 }
 
-func ident_t(p string) string {
-	len := 1
-	for isalpha(rune(p[len])) || unicode.IsDigit(rune(p[len])) || p[len] == '_' {
-		len++
+func (app *TokenApp) ident_t(p string) string {
+	ilen := 1
+	char := p[ilen]
+	for isalpha(char) || isdigit_char(char) || char == '_' {
+		ilen++
+		char = p[ilen]
 	}
 
-	name := strndup(p, len)
+	name := strndup(p, ilen)
 	ty := map_geti(keywords, name, TK_IDENT)
-	t := add_t(ty, p)
+	t := app.add_t(ty, p)
 	t.name = name
-	t.end = p[len:]
-	return p[len:]
+	t.end = p[ilen:]
+	return p[ilen:]
 }
 
-func hexadecimal(p string) string {
-	t := add_t(TK_NUM, p)
-	p = p[2:]
+func (app *TokenApp) hexadecimal(p string) string {
+	t := app.add_t(TK_NUM, p)
 
-	if !isxdigit(string(p[0])) {
+	idx := 2
+	char := p[idx]
+	if !isxdigit_char(char) {
 		bad_token(t, "bad hexadecimal number")
 	}
 
-	for {
-		c := int(p[0])
-		if '0' <= c && c <= '9' {
-			t.val = t.val*16 + c - '0'
-			p = p[1:]
-		} else if 'a' <= c && c <= 'f' {
-			t.val = t.val*16 + c - 'a' + 10
-			p = p[1:]
-		} else if 'A' <= c && c <= 'F' {
-			t.val = t.val*16 + c - 'A' + 10
-			p = p[1:]
-		} else {
-			t.end = p
-			return p
-		}
+	tmp := 0
+	for isxdigit_char(char) {
+		tmp = tmp*16 + isxdigit_val(char)
+		idx += 1
+		char = p[idx]
 	}
-	return ""
+
+	t.val = tmp
+	return p[idx:]
 }
 
-func octal(p string) string {
-	t := add_t(TK_NUM, p)
+func (app *TokenApp) octal(p string) string {
+	t := app.add_t(TK_NUM, p)
 	p = p[1:]
 
 	c := p[0]
@@ -343,8 +374,8 @@ func octal(p string) string {
 	return p
 }
 
-func decimal(p string) string {
-	t := add_t(TK_NUM, p)
+func (app *TokenApp) decimal(p string) string {
+	t := app.add_t(TK_NUM, p)
 	for unicode.IsDigit(rune(p[0])) {
 		t.val = t.val*10 + int(p[0]) - '0'
 		p = p[1:]
@@ -353,26 +384,27 @@ func decimal(p string) string {
 	return p
 }
 
-func number(p string) string {
+func (app *TokenApp) number(p string) string {
 	if strncasecmp(p, "0x", 2) == 0 {
-		return hexadecimal(p)
+		return app.hexadecimal(p)
 	}
-	if p[0] == '0' {
-		return octal(p)
+	char := p[0]
+	if char == '0' {
+		return app.octal(p)
 	}
-	return decimal(p)
+	return app.decimal(p)
 }
 
 // Tokenized input is stored to this array
-func scan() {
+func (app *TokenApp) scan() {
 	p := buf
 
 loop:
 	for len(p) != 0 {
-		c := rune(p[0])
+		c := p[0]
 		// New line (preprocessor-only token)
 		if c == '\n' {
-			t := add_t(int(c), p)
+			t := app.add_t(int(c), p)
 			p = p[1:]
 			t.end = p
 			continue
@@ -388,7 +420,7 @@ loop:
 		if strncmp(p, "//", 2) == 0 {
 			for len(p) != 0 && c != '\n' {
 				p = p[1:]
-				c = rune(p[0])
+				c = p[0]
 			}
 			continue
 		}
@@ -401,13 +433,13 @@ loop:
 
 		// Character literal
 		if c == '\'' {
-			p = char_literal(p)
+			p = app.char_literal(p)
 			continue
 		}
 
 		// String literal
 		if c == '"' {
-			p = string_literal(p)
+			p = app.string_literal(p)
 			continue
 		}
 
@@ -420,15 +452,15 @@ loop:
 			if strncmp(p, sym.name, length) != 0 {
 				continue
 			}
-			t := add_t(sym.ty, p)
+			t := app.add_t(sym.ty, p)
 			p = p[length:]
 			t.end = p
 			continue loop
 		}
 
 		// Single-letter symbol
-		if strchr("+-*/;=(),{}<>[]&.!?:|^%~#", c) != "" {
-			t := add_t(int(c), p)
+		if strchr("+-*/;=(),{}<>[]&.!?:|^%~#", c) >= 0 {
+			t := app.add_t(int(c), p)
 			p = p[1:]
 			t.end = p
 			continue
@@ -436,18 +468,18 @@ loop:
 
 		// Keyword or identifier
 		if isalpha(c) || c == '_' {
-			p = ident_t(p)
+			p = app.ident_t(p)
 			continue
 		}
 
 		// Number
-		if unicode.IsDigit(c) {
-			p = number(p)
+		if isdigit_char(c) {
+			p = app.number(p)
 			continue
 		}
 
-		print_line(ctx.buf, ctx.path, p)
-		error("cannot tokenize")
+		print_line(app.ctx.buf, app.ctx.path, p)
+		errorReport("cannot tokenize")
 	}
 }
 
@@ -457,6 +489,12 @@ func canonicalize_newline(p string) string {
 
 func remove_backslash_newline(p string) string {
 	return strings.Replace(p, "\\\n", "", -1)
+}
+
+func remove_pragma_newline(p string) string {
+	p = strings.Replace(p, "\n#pragma", "\n// #pragma", -1)
+	p = strings.Replace(p, "\n__pragma", "\n// __pragma", -1)
+	return p
 }
 
 func strip_newline_tokens(tokens *Vector) *Vector {
@@ -495,7 +533,7 @@ func join_string_literals(tokens *Vector) *Vector {
 	return v
 }
 
-func tokenize(path string, add_eof bool) *Vector {
+func tokenize(path string, add_eof bool, ctx *Context) *Vector {
 	if keywords == nil {
 		keywords = keyword_map()
 	}
@@ -503,17 +541,19 @@ func tokenize(path string, add_eof bool) *Vector {
 	buf = read_file(path)
 	buf = canonicalize_newline(buf)
 	buf = remove_backslash_newline(buf)
-
-	ctx = new_ctx(ctx, path, buf)
-	scan()
+	buf = remove_pragma_newline(buf)
+	app := &TokenApp{
+		ctx: new_ctx(ctx, path, buf),
+	}
+	app.scan()
 	if add_eof {
-		add_t(TK_EOF, "")
+		app.add_t(TK_EOF, "")
 	}
 
-	v := ctx.tokens
-	ctx = ctx.next
+	v := app.ctx.tokens
+	app.ctx = app.ctx.next
 
-	v = preprocess(v)
+	v = app.preprocess(v)
 	v = strip_newline_tokens(v)
 	return join_string_literals(v)
 }

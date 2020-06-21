@@ -456,7 +456,7 @@ func gen_stmt(node *Node) {
 		}
 	case ND_BREAK:
 		if break_label == 0 {
-			error("stray 'break' statement")
+			errorReport("stray 'break' statement")
 		}
 		jmp(break_label)
 	case ND_RETURN:
@@ -488,7 +488,7 @@ func gen_stmt(node *Node) {
 			return
 		}
 	default:
-		error("unknown node: %d", node.op)
+		errorReport("unknown node: %d", node.op)
 	}
 }
 

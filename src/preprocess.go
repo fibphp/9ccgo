@@ -68,7 +68,7 @@ func get(ty int, msg string) *Token {
 }
 
 func ident_p(msg string) string {
-	t := get(TK_IDENT, "parameter name expected")
+	t := get(TK_IDENT, "parameter file expected")
 	return t.name
 }
 
@@ -243,10 +243,10 @@ func apply(m *Macro, start *Token) {
 
 func funclike_macro(name string) {
 	m := new_macro(FUNCLIKE, name)
-	vec_push(m.params, ident_p("parameter name expected"))
+	vec_push(m.params, ident_p("parameter file expected"))
 	for !consume_p(')') {
 		get(',', "comma expected")
-		vec_push(m.params, ident_p("parameter name expected"))
+		vec_push(m.params, ident_p("parameter file expected"))
 	}
 	m.tokens = read_until_eol()
 	replace_params(m)
@@ -258,7 +258,7 @@ func objlike_macro(name string) {
 }
 
 func define() {
-	name := ident_p("macro name expected")
+	name := ident_p("macro file expected")
 	if consume_p('(') {
 		funclike_macro(name)
 		return
@@ -266,14 +266,14 @@ func define() {
 	objlike_macro(name)
 }
 
-func include() {
+func (app *TokenApp) include() {
 	t := get(TK_STR, "string expected")
 	path := t.str
 	get('\n', "newline expected")
-	append_p(tokenize(path, false))
+	append_p(tokenize(path, false, app.ctx))
 }
 
-func preprocess(tokens *Vector) *Vector {
+func (app *TokenApp) preprocess(tokens *Vector) *Vector {
 	if macros == nil {
 		macros = new_map()
 	}
@@ -302,7 +302,7 @@ func preprocess(tokens *Vector) *Vector {
 		if strcmp(t.name, "define") == 0 {
 			define()
 		} else if strcmp(t.name, "include") == 0 {
-			include()
+			app.include()
 		} else {
 			bad_token(t, "unknown directive")
 		}

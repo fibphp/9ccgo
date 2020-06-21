@@ -6,9 +6,51 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"unicode"
 	"unsafe"
 )
+
+type ClPayload struct {
+	file string
+}
+
+func (p *ClPayload) Name() string {
+	return p.file
+}
+func (p *ClPayload) Play(w *Worker) {
+	input := p.file
+	fmt.Printf("Info tokenize worker:%s file:%s \n", w.name, input)
+	tokens := tokenize(input, true, nil)
+	fmt.Printf("Info done worker:%s file:%s tokens:%d \n", w.name, input, tokens.len)
+}
+
+func do_cl(cfgs []CfgConfig) {
+	// i := "Zend\\zend_string.cipp"
+	// tokenize(i, true, nil)
+
+	jobQueue := make(chan *Job)
+	dispatch := NewDispatcher("cl", 8, jobQueue, false)
+	dispatch.Run()
+
+	for _, cfg := range cfgs {
+		inputs := cfg.Input
+		for _, input := range inputs {
+			input = input + "ipp"
+			if _, err := os.Stat(input); err == nil || os.IsExist(err) {
+				jobQueue <- &Job{
+					Payload: &ClPayload{
+						file: input,
+					},
+				}
+			} else {
+				fmt.Printf("Error Not Found file:%s \n", input)
+			}
+		}
+	}
+
+	dispatch.Join()
+	dispatch.Stop()
+	close(jobQueue)
+}
 
 func new_sb() *StringBuilder {
 	sb := new(StringBuilder)
@@ -221,14 +263,14 @@ func vec_push(v *Vector, elem interface{}) {
 	v.len++
 }
 
-// An error reporting function
-func error(format string, a ...interface{}) {
+// An errorReport reporting function
+func errorReport(format string, a ...interface{}) {
 	fmt.Fprintf(os.Stderr, format, a...)
 	fmt.Fprintf(os.Stderr, "\n")
 	os.Exit(1)
 }
 
-func popcount(x uint) int {
+func popCount(x uint) int {
 	ret := 0
 	for n := uint(0); n < uint(unsafe.Sizeof(x))*8; n++ {
 		if x&(1<<n) != 0 {
@@ -251,30 +293,14 @@ func ctz(x uint) int {
 	return ret
 }
 
-func strtol(s string, b int) (int, string) {
-	if !unicode.IsDigit([]rune(s)[0]) {
-		return 0, s
-	}
-
-	j := len(s)
-	for i, c := range s {
-		if !unicode.IsDigit(c) {
-			j = i
-			break
+func strchr(s string, c uint8) int {
+	sl := len(s)
+	for idx := 0; idx < sl; idx++ {
+		if s[idx] == c {
+			return idx
 		}
 	}
-	n, _ := strconv.ParseInt(s[:j], b, 32)
-	return int(n), s[j:]
-
-}
-
-func strchr(s string, c rune) string {
-	for i, r := range s {
-		if c == r {
-			return s[i:]
-		}
-	}
-	return ""
+	return -1
 }
 
 func strndup(s string, size int) string {
@@ -314,16 +340,53 @@ func strncasecmp(s1, s2 string, n int) int {
 	return strncmp(strings.ToUpper(s1), strings.ToUpper(s2), n)
 }
 
-func isgraph(c rune) bool {
+func isgraph(c uint8) bool {
 	return 0x21 <= c && c <= 0x7e
 }
 
-func isprint(c rune) bool {
+func isprint(c uint8) bool {
 	return 0x20 <= c && c <= 0x7e
 }
 
-func isalpha(c rune) bool {
+func isalpha(c uint8) bool {
 	return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z')
+}
+
+func isdigit_char(c uint8) bool {
+	return '0' <= c && c <= '9'
+}
+
+func isdigit_val(c uint8) int {
+	if '0' <= c && c <= '9' {
+		return int(c - '0')
+	}
+	return 0
+}
+
+func isoctal_char(c uint8) bool {
+	return '0' <= c && c <= '7'
+}
+
+func isoctal_val(c uint8) int {
+	if '0' <= c && c <= '7' {
+		return int(c - '0')
+	}
+	return 0
+}
+
+func isxdigit_char(c uint8) bool {
+	return ('a' <= c && c <= 'f') || ('A' <= c && c <= 'F') || ('0' <= c && c <= '9')
+}
+
+func isxdigit_val(c uint8) int {
+	if '0' <= c && c <= '9' {
+		return int(c - '0')
+	} else if 'a' <= c && c <= 'f' {
+		return int(c - 'a' + 10)
+	} else if 'A' <= c && c <= 'F' {
+		return int(c - 'A' + 10)
+	}
+	return 0
 }
 
 func isxdigit(s string) bool {
