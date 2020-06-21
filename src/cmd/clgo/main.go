@@ -6,6 +6,8 @@ import (
 	. "go9cc"
 	"io/ioutil"
 	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	. "utils"
 )
@@ -64,6 +66,9 @@ func do_cl(cfgs []CfgConfig) {
 }
 
 func main() {
+	go func() {
+		http.ListenAndServe("0.0.0.0:8080", nil)
+	}()
 
 	debug := false
 	if len(os.Args) == 1 {

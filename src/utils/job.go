@@ -42,7 +42,8 @@ type Dispatcher struct {
 func GetGID() int {
 	defer func()  {
 		if err := recover(); err != nil {
-			fmt.Println("panic recover:panic info:%v", err)     }
+			fmt.Printf("panic recover:panic info:%v\n", err)
+		}
 	}()
 
 	var buf [64]byte

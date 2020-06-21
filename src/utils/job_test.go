@@ -40,7 +40,7 @@ func Test_main(t *testing.T) {
 
 	dispatch.Join()
 
-	for i := 10; i < 20; i++ {
+	for i := 10; i < 40; i++ {
 		name := fmt.Sprintf("job-%s", strconv.Itoa(i))
 		fmt.Printf("[%s] 初始化新任务 \n", name)
 		p := &TestPayload{
